@@ -130,6 +130,7 @@ include_directories(
 
 ## Declare a C++ executable
  add_executable(attitude_decision src/attitude_decision.cpp)
+ add_executable(attitude_decision_quad src/attitude_decision_quad.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -137,6 +138,7 @@ include_directories(
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(attitude_decision ${catkin_LIBRARIES})
+ target_link_libraries(attitude_decision_quad ${catkin_LIBRARIES})
 
 #############
 ## Install ##
