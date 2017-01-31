@@ -114,37 +114,37 @@ int main(int argc, char **argv)
             if((yaw_begin > 0 && yaw_begin < 270) && (angular_diff > 30 && angular_diff <90))
             {
                 ROS_INFO_STREAM("1");
-                twist.angular.z = 1;
+                twist.angular.z = -1;
             }
 
             else if((yaw_begin > 90 && yaw_begin < 360) && (angular_diff > -90 && angular_diff < -30))
             {
                 ROS_INFO_STREAM("2");
-                twist.angular.z = -1;
+                twist.angular.z = 1;
             }
             
             else if((yaw_begin > 270 && yaw_begin < 360) && (yaw_angle > 270 && yaw_angle < 360) && (angular_diff > 30 && angular_diff < 90))
             {
                 ROS_INFO_STREAM("3");
-                twist.angular.z = 1;
+                twist.angular.z = -1;
             }
 
             else if((yaw_begin > 270 && yaw_begin < 360) && (yaw_angle > 0 && yaw_angle < 90) && (angular_diff > -330 && angular_diff < -270))
             {
                 ROS_INFO_STREAM("4");
-                twist.angular.z = 1;
+                twist.angular.z = -1;
             }
 
             else if((yaw_begin > 0 && yaw_begin < 90) && (yaw_angle > 0 && yaw_angle < 90) && (angular_diff > -90 && angular_diff < -30))
             {
                 ROS_INFO_STREAM("5");
-                twist.angular.z = -1;
+                twist.angular.z = 1;
             }
 
             else if((yaw_begin > 0 && yaw_begin < 90) && (yaw_angle > 270 && yaw_angle < 360) && (angular_diff > 270 && angular_diff < 360))
             {
                 ROS_INFO_STREAM("6");
-                twist.angular.z = -1;
+                twist.angular.z = 1;
             }
 
             else twist.angular.z = 0;
