@@ -103,30 +103,6 @@ int main(int argc, char **argv)
         {
             twist.linear.y = 0;
         }
-
-        if(pitch.data > 15)
-        {
-            twist.linear.x = 0.3;
-            flag = true;
-        }
-        
-        else if(pitch.data < -15 && pitch.data > -45)
-        {
-            twist.linear.x = -0.3;
-            flag = true;               
-        }
-
-        else if(pitch.data < -45)
-        {
-            flag = false;
-            ROS_INFO_STREAM("Operation aborted. Please, restart the system.");
-            break;
-        }
-        
-        else
-        {
-            twist.linear.x = 0;
-        } 
             
         if(joy.x > 900)
         {
@@ -181,15 +157,53 @@ int main(int argc, char **argv)
             }
         }
 
+        if(pitch.data > 15)
+        {
+            twist.linear.x = 0.3;
+            flag = true;
+        }
+        
+        else if(pitch.data < -15 && pitch.data > -45)
+        {
+            twist.linear.x = -0.3;
+            flag = true;               
+        }
+
+        else if(pitch.data < -45)
+        {
+            /*! Set all velocities to 0 */
+            twist.linear.x = 0;
+            twist.linear.y = 0;
+            twist.linear.z = 0;
+            twist.angular.z = 0;
+
+            linear_x = twist.linear.x;
+            linear_y = twist.linear.y;
+            linear_z = twist.linear.z;
+            angular_z = twist.angular.z;
+
+            ROS_INFO_STREAM("Linear X: " << linear_x);
+            ROS_INFO_STREAM("Linear Y: " << linear_y);
+            ROS_INFO_STREAM("Linear Z: " << linear_z);
+            ROS_INFO_STREAM("Angular Z: " << angular_z);
+            
+            pub_twist.publish(twist);
+
+            ROS_INFO_STREAM("Operation aborted. Please, restart the system.");
+            
+            break;
+        }
+                
+        else
+        {
+            twist.linear.x = 0;
+        } 
+
         linear_x = twist.linear.x;
         linear_y = twist.linear.y;
         linear_z = twist.linear.z;
         angular_z = twist.angular.z;
-
-        if(flag == true)
-         {
-            pub_twist.publish(twist);
-        }   
+ 
 
         if(operation_mode == false)
         {
@@ -211,7 +225,17 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Linear Y: " << linear_y);
         ROS_INFO_STREAM("Linear Z: " << linear_z);
         ROS_INFO_STREAM("Angular Z: " << angular_z);
-        
+
+
+        /*! If it is desired that this node only publishes to the topic when it has velocities
+        commands different than 0, please uncomment this conditional structure.
+        If you want to have another controller alongside with this node, and switch between them,
+        for example, the conditional structure MUST be uncommented, in order to let the topic
+        free when this controller node is not being used (velocities desired here are = 0) . */
+        //if(flag == true)
+        //{
+            pub_twist.publish(twist);
+        //  }  
 
         ros::spinOnce();
         loop_rate.sleep();
