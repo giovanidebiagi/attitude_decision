@@ -5,6 +5,9 @@ project(attitude_decision)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  ##sensor_fusion_comm
+  ##asctec_hl_comm
+  ##actionlib
   geometry_msgs
   roscpp
   sensor_msgs
@@ -44,11 +47,18 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * uncomment the generate_messages entry below
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
+catkin_package(
+    DEPENDS
+    CATKIN_DEPENDS geometry_msgs roscpp sensor_msgs
+    INCLUDE_DIRS
+    LIBRARIES
+)
+
 ## Generate messages in the 'msg' folder
 # add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
+#   FILESsensor_msgs
+#   Messasensor_msgs
+#   Messasensor_msgs
 # )
 
 ## Generate services in the 'srv' folder
@@ -65,7 +75,7 @@ find_package(catkin REQUIRED COMPONENTS
 #   Action2.action
 # )
 
-## Generate added messages and services with any dependencies listed here
+## Generate added messages and services with any dependencies listed heresensor_msgs
 # generate_messages(
 #   DEPENDENCIES
 #   geometry_msgs#   sensor_msgs#   std_msgs
@@ -131,6 +141,9 @@ include_directories(
 ## Declare a C++ executable
  add_executable(attitude_decision src/attitude_decision.cpp)
  add_executable(attitude_decision_quad src/attitude_decision_quad.cpp)
+ add_executable(attitude_decision_bebop src/attitude_decision_bebop.cpp)
+ add_executable(attitude_decision_pelican src/attitude_decision_pelican.cpp)
+ add_executable(attitude_decision_vrep src/attitude_decision_vrep.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -139,6 +152,9 @@ include_directories(
 ## Specify libraries to link a library or executable target against
  target_link_libraries(attitude_decision ${catkin_LIBRARIES})
  target_link_libraries(attitude_decision_quad ${catkin_LIBRARIES})
+ target_link_libraries(attitude_decision_bebop ${catkin_LIBRARIES})
+ target_link_libraries(attitude_decision_pelican ${catkin_LIBRARIES})
+ target_link_libraries(attitude_decision_vrep ${catkin_LIBRARIES})
 
 #############
 ## Install ##

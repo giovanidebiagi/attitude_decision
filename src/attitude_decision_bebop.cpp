@@ -1,9 +1,9 @@
 #include "ros/ros.h"
 #include "geometry_msgs/Twist.h"
+#include "geometry_msgs/Vector3.h"
 #include "std_msgs/Float64.h"
-#include <asctec_hl_comm/mav_ctrl.h>
+#include "std_msgs/Bool.h"
 #include <sensor_msgs/Joy.h>
-#include <geometry_msgs/Vector3Stamped.h> /*!< Code for VREP Simulator quadrotor */
 
 std_msgs::Float64 roll, pitch, heading, initial_heading;
 geometry_msgs::Vector3 joy;
@@ -11,24 +11,22 @@ geometry_msgs::Vector3 joy;
 /*! Code for Bebop quadrotor */
 geometry_msgs::Twist twist;
 
-/*! Code for Pelican quadrotor */
-// asctec_hl_comm::mav_ctrl vel_ctrl;
+/*! This is used to make the attitude_decision nodes aware that the measurements have been reseted, allowing them to recalculate the relative values measurements */
+std_msgs::Bool reset;
 
-/*! Code for VREP Simulator quadrotor */
-// geometry_msgs::Twist twist;
-
-static ros::Publisher mav_pub;  /*! Diego's code */
-bool readyToControl = false;    /*! Diego's code. If this is false, the code doesnt publish anything. */
-
-bool lastWill = false;
+/*! This is used to prevent conversion node from reseting if attitude_decision is in joystik mode */
+std_msgs::Bool operation_mode;
 
 float linear_x, linear_y, linear_z, angular_z;
+
+/*! This is used to give control of the drone to this code */
+int allow_button = 0;
 
 /*! Boolean variable to choose from controlling yaw rate using either gyroscope or joystick.
     
     joystick -> operation_mode = false
     gyro -> operation_mode = true */
-bool operation_mode = false;
+//bool operation_mode = false;
 
 /*! Boolean variable used to only send commands if the user is willing to.
     This keeps the command topics free unless there are commands to be sent, therefore, it allows
@@ -37,6 +35,17 @@ bool operation_mode = false;
     sending commands -> flag = true
     not sending commands -> flag = false */
 bool flag = false;
+
+
+
+
+/*! Boolean variable used to give control to the joystick if necessary
+ false -> glove can control (publishes) 
+ true -> only joystick can control (glove does not publish) */
+bool readyToControl = false; 
+bool lastWill = false; /*!< This is used to set all velocities to 0 before publishing for the last time */
+
+
 
 /*! Boolean variable to abort operation in case of emergency */
 bool aborting_flag = false;
@@ -65,31 +74,39 @@ void callback_joy(const geometry_msgs::Vector3& msg)
     joy.z = msg.z;
 }
 
-/*! Diego's code for Pelican
+void callback_reset(const std_msgs::Bool& msg)
+{
+    reset.data = msg.data;
+}
+
+
+
 void callback_rc(const sensor_msgs::Joy::ConstPtr& msg)
 {
 
 //   if (mav_pub) {
-    asctec_hl_comm::mav_ctrl mav;   
-    mav.header.stamp = msg->header.stamp;
+    // asctec_hl_comm::mav_ctrl mav;   
+    // mav.header.stamp = msg->header.stamp;
 
     // Begin Message Realocation
-    if (msg->axes[6] > 0)
+    if (msg->buttons[4] == 1)
     {
-      readyToControl = true;    /*! Makes the code able to publish the message 
+      readyToControl = true;    /*! Makes the code able to publish the message */
+      allow_button = 1;
     }
 
     else 
     {
         readyToControl = false;
+        allow_button = 0;
     }
+
 //   }
 }
-*/
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "attitude_decision_quad");
+    ros::init(argc, argv, "attitude_decision_bebop");
     
     ros::NodeHandle node;
     
@@ -97,28 +114,24 @@ int main(int argc, char **argv)
     ros::Subscriber sub_pitch = node.subscribe("pitch", 1, callback_pitch);
     ros::Subscriber sub_heading = node.subscribe("heading", 1, callback_heading);
     ros::Subscriber sub_thrust = node.subscribe("joy", 1, callback_joy);
+    ros::Subscriber sub_reset = node.subscribe("reset", 1, callback_reset); /*!< This is used to make the attitude_decision nodes aware that the measurements have been reseted, allowing them to recalculate the relative values measurements */
     
-    /*! Code for Pelican quadrotor */
-    // ros::Subscriber sub = node.subscribe("fcu/rc", 1, callback_rc); /*! Subscribed to the radio controller to check if its sending commands */
-    
+    ros::Subscriber sub = node.subscribe("/bebop/joy", 1, callback_rc); /*! Subscribed to the radio controller to check if its sending commands */
+
     /*! Code for Bebop quadrotor */
+    ros::Publisher pub_operation_mode = node.advertise<std_msgs::Bool>("/operation_mode",1);
     ros::Publisher pub_twist = node.advertise<geometry_msgs::Twist>("/bebop/cmd_vel",1);
 
-    /*! Code for Pelican quadrotor */
-    // ros::Publisher pub_vel = node.advertise<asctec_hl_comm::mav_ctrl>("/fcu/control",1);
+    ros::Rate loop_rate(50);
 
-    /*! Code for VREP Simulator quadrotor */
-    // ros::Publisher pub_twist = node.advertise<geometry_msgs::Twist>("/cmd_vel",1);
-
-    // ros::Rate loop_rate(50);
-    ros::Rate loop_rate(20);
-
+    operation_mode.data = false;
     joy.z = 1;
+    reset.data = false; /*!< This is used to make the attitude_decision nodes aware that the measurements have been reseted, allowing them to recalculate the relative values measurements */  
     
     /*!  Using launch file, it is necessary that this node waits for the imu_node to open
          the serial port and start publishing data, otherwise the conversion_node will have
          garbage values and attitude_decision nodes will abort operation */
-    usleep(5000000);  
+    usleep(5000000);
 
     while(ros::ok())
     {        
@@ -130,23 +143,10 @@ int main(int argc, char **argv)
         twist.linear.z = 0;
         twist.angular.z = 0;
 
-        /*! Code for Pelican quadrotor */
-        // vel_ctrl.type = 4;  /*! Control mode of body velocities */
-        // vel_ctrl.x = 0;
-        // vel_ctrl.y = 0;
-        // vel_ctrl.z = 0;
-        // vel_ctrl.yaw = 0;
-
-        /*! Code for VREP Simulator quadrotor */
-        // twist.linear.x = 0;
-        // twist.linear.y = 0;
-        // twist.linear.z = 0;
-        // twist.angular.z = 0;
-
         if(joy.z == 0 && previous_joy_state == 0)
         {
-            if(operation_mode == false) operation_mode = true;
-            else if(operation_mode == true) operation_mode = false;
+            if(operation_mode.data == false) operation_mode.data = true;
+            else if(operation_mode.data == true) operation_mode.data = false;
             
             previous_joy_state = 1;
         }
@@ -161,12 +161,6 @@ int main(int argc, char **argv)
             /*! Code for Bebop quadrotor */
             twist.linear.y = -0.3;
 
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.y = -0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.x = 0.5;
-
             flag = true;
         }
         
@@ -175,12 +169,6 @@ int main(int argc, char **argv)
             /*! Code for Bebop quadrotor */
             twist.linear.y = 0.3;
             
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.y = 0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.x = -0.5;
-
             flag = true;
         }
         
@@ -188,25 +176,12 @@ int main(int argc, char **argv)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.y = 0;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.y = 0;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.y = 0;
-
         }
             
         if(joy.x > 900)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.z = -0.3;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.z = -0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.z = 0.5;
 
             flag = true;
         }
@@ -215,13 +190,7 @@ int main(int argc, char **argv)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.z = 0.3;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.z = 0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.z = -0.5;
-
+            
             flag = true;                
         }
 
@@ -229,96 +198,61 @@ int main(int argc, char **argv)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.z = 0;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.z = 0;  
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.z = 0;
         }
 
-        if(operation_mode == false)
+        if(operation_mode.data == false)
         {    
             if(joy.y > 900)
             {
                 /*! Code for Bebop quadrotor */
-                twist.angular.z = 0.3;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = -0.2;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = 0.5;
+                twist.angular.z = -0.3;
             }
 
             else if(joy.y < 200)
             {
                 /*! Code for Bebop quadrotor */
-                twist.angular.z = -0.3;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = 0.2;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = -0.5;
+                twist.angular.z = 0.3;
             }
 
             else
             {
                 /*! Code for Bebop quadrotor */
                 twist.angular.z = 0;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = 0;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = 0;
             }
-
+            
             /*! Auxiliary variable used to, when gyro mode is activated, it starts with
             heading = 0 */
             initial_heading.data = heading.data;
         }
 
-        else if(operation_mode == true)
-        {
+        else if(operation_mode.data == true)
+        {   
+            /*! This is used to make the attitude_decision nodes aware that the measurements have been reseted, allowing them to recalculate the relative values measurements */
+            if(reset.data == true)
+            {
+                initial_heading.data = 0;
+                reset.data = false;
+            }
+
             /*! When gyro mode is activated, it starts with heading = 0 */
             heading.data = heading.data - initial_heading.data;
 
             if(heading.data > 25)
             {
                 /*! Code for Bebop quadrotor */
-                twist.angular.z = 0.3;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = -0.2;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = 0.5;
+                twist.angular.z = -0.3;
             }
 
             else if(heading.data < -25)
             {
                 /*! Code for Bebop quadrotor */
-                twist.angular.z = -0.3;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = 0.2;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = -0.5;
+                twist.angular.z = 0.3;
             }
 
             else
             {
                 /*! Code for Bebop quadrotor */
                 twist.angular.z = 0;
-
-                /*! Code for Pelican quadrotor */
-                // vel_ctrl.yaw = 0;
-
-                /*! Code for VREP Simulator quadrotor */
-                // twist.angular.z = 0;
             }
         }
 
@@ -327,12 +261,6 @@ int main(int argc, char **argv)
             /*! Code for Bebop quadrotor */
             twist.linear.x = 0.3;
 
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.x = -0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.y = -0.5;
-
             flag = true;
         }
         
@@ -340,12 +268,6 @@ int main(int argc, char **argv)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.x = -0.3;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.x = 0.2;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.y = 0.5;
 
             flag = true;               
         }
@@ -365,28 +287,6 @@ int main(int argc, char **argv)
             linear_z = twist.linear.z;
             angular_z = twist.angular.z;
 
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.x = 0;
-            // vel_ctrl.y = 0;
-            // vel_ctrl.z = 0;
-            // vel_ctrl.yaw = 0;
-
-            // linear_x = vel_ctrl.x;
-            // linear_y = vel_ctrl.y;
-            // linear_z = vel_ctrl.z;
-            // angular_z = vel_ctrl.yaw;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.x = 0;
-            // twist.linear.y = 0;
-            // twist.linear.z = 0;
-            // twist.angular.z = 0;
-
-            // linear_x = twist.linear.x;
-            // linear_y = twist.linear.y;
-            // linear_z = twist.linear.z;
-            // angular_z = twist.angular.z;
-
             ROS_INFO_STREAM("Linear X: " << linear_x);
             ROS_INFO_STREAM("Linear Y: " << linear_y);
             ROS_INFO_STREAM("Linear Z: " << linear_z);
@@ -394,12 +294,6 @@ int main(int argc, char **argv)
             
             /*! Publish message for Bebop quadrotor */
             pub_twist.publish(twist);
-
-            /*! Publish message for Pelican quadrotor */
-            // pub_vel.publish(vel_ctrl);
-
-            /*! Publish message for VREP Simulator quadrotor */
-            // pub_twist.publish(twist);
 
             ROS_INFO_STREAM("Operation aborted. Please, restart the system.");
             
@@ -410,12 +304,6 @@ int main(int argc, char **argv)
         {
             /*! Code for Bebop quadrotor */
             twist.linear.x = 0;
-
-            /*! Code for Pelican quadrotor */
-            // vel_ctrl.x = 0;
-
-            /*! Code for VREP Simulator quadrotor */
-            // twist.linear.y = 0;
         } 
 
         /*! Code for Bebop quadrotor */
@@ -423,26 +311,13 @@ int main(int argc, char **argv)
         linear_y = twist.linear.y;
         linear_z = twist.linear.z;
         angular_z = twist.angular.z;
-
-        /*! Code for Pelican quadrotor */
-        // linear_x = vel_ctrl.x;
-        // linear_y = vel_ctrl.y;
-        // linear_z = vel_ctrl.z;
-        // angular_z = vel_ctrl.yaw;
-
-        /*! Code for VREP Simulator quadrotor */
-        // linear_x = twist.linear.x;
-        // linear_y = twist.linear.y;
-        // linear_z = twist.linear.z;
-        // angular_z = twist.angular.z;
-        
     
-        if(operation_mode == false)
+        if(operation_mode.data == false)
         {
             ROS_INFO_STREAM("Heading control: Joystick. Press the joystick button to switch.");
         }
 
-        else if(operation_mode == true)
+        else if(operation_mode.data == true)
         {
             ROS_INFO_STREAM("Heading control: Gyroscope. Press the joystick button to switch.");
         }    
@@ -458,6 +333,35 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Linear Z: " << linear_z);
         ROS_INFO_STREAM("Angular Z: " << angular_z);
 
+        ROS_INFO_STREAM("L1: " << allow_button);
+
+        pub_operation_mode.publish(operation_mode);
+
+        if(readyToControl == true)
+        {
+            pub_twist.publish(twist);
+                    
+            /*! Auxiliary variable used to make velocities 0 before publishing for the
+            last time and giving control to the radio controller */
+            lastWill = true;
+        }
+
+        else if(readyToControl == false)
+        {
+            /*! Turns all commands into 0 before publishing for the last time and giving
+            control to the radio controller */
+            twist.linear.x = 0;
+            twist.linear.y = 0;
+            twist.linear.z = 0;
+            twist.angular.z = 0;
+
+            if(lastWill == true)
+            {
+                pub_twist.publish(twist);
+                lastWill = false;
+            }
+        }     
+
 
         /*! If it is desired that this node only publishes to the topic when it has velocities
         commands different than 0, please uncomment this conditional structure.
@@ -467,43 +371,8 @@ int main(int argc, char **argv)
         // if(flag == true)
         // {
             /*! Code for Bebop quadrotor */
-            pub_twist.publish(twist);
-        
-            /*! Code for Pelican quadrotor 
-            if(readyToControl == true)
-            {
-                pub_vel.publish(vel_ctrl);
-                
-                /*! Auxiliary variable used to make velocities 0 before publishing for the
-                last time and giving control to the radio controller 
-                lastWill = true;
-            }
-
-            else if(readyToControl == false)
-            {
-                /*! Turns all commands into 0 before publishing for the last time and giving
-                control to the radio controller 
-                vel_ctrl.x = 0;
-                vel_ctrl.y = 0;
-                vel_ctrl.z = 0;
-                vel_ctrl.yaw = 0;
-
-                if(lastWill == true)
-                {
-                    pub_vel.publish(vel_ctrl);
-                    lastWill = false;
-                }
-            }
-            */
-
-            /*! Code for VREP Simulator quadrotor */
-            // if(readyToControl == true)
-            // {
-                // pub_twist.publish(twist);
-            // }   
+            // pub_twist.publish(twist);
         //  }  
-
-
 
         ros::spinOnce();
         loop_rate.sleep();
